@@ -146,6 +146,44 @@ def exibir_intervalo_captura(lista_pacotes):
         ["Duração total (segundos)", f"{duracao:.6f}"]
     ], headers=["Descrição", "Valor"], tablefmt="fancy_grid"))
 
+# Função para exibir o maior pacote TCP capturado
+def exibir_maior_pacote_tcp(lista_pacotes):
+    maior_tamanho_tcp = 0
+    ip_origem_maior = ""
+    ip_destino_maior = ""
+
+    for pacote in lista_pacotes:
+        dados = pacote['dados']
+        if len(dados) < 34:
+            continue  # não tem IP suficiente
+
+        # Ignora cabeçalho Ethernet
+        cabecalho_ip = dados[14:34]
+
+        # O byte 9 do cabeçalho IP contém o número do protocolo da camada de transporte
+        # Segundo a IANA (Internet Assigned Numbers Authority):
+        # - TCP = 6
+        # - UDP = 17
+        # - ICMP = 1
+        # Veja a tabela completa: https://www.iana.org/assignments/protocol-numbers/protocol-numbers.xhtml
+        protocolo = cabecalho_ip[9]
+        if protocolo != 6:
+            continue  # não é TCP
+
+        tamanho_original = pacote['origlen']
+
+        if tamanho_original > maior_tamanho_tcp:
+            maior_tamanho_tcp = tamanho_original
+            ip_origem_maior = ".".join(str(b) for b in cabecalho_ip[12:16])
+            ip_destino_maior = ".".join(str(b) for b in cabecalho_ip[16:20])
+
+    print(Fore.CYAN + "\n[INFO] Maior pacote TCP capturado:")
+    print(tabulate([
+        ["Tamanho (bytes)", maior_tamanho_tcp],
+        ["IP de Origem", ip_origem_maior],
+        ["IP de Destino", ip_destino_maior]
+    ], headers=["Campo", "Valor"], tablefmt="fancy_grid"))
+
 # Função principal para executar o código
 if __name__ == "__main__":
     caminho_selecionado = abrir_janela_selecao_arquivo()
@@ -154,5 +192,7 @@ if __name__ == "__main__":
         pacotes_lidos = carregar_pacotes_pcap(caminho_selecionado)
         exibir_headers_ip(pacotes_lidos)
         exibir_intervalo_captura(pacotes_lidos)
+        exibir_maior_pacote_tcp(pacotes_lidos)
+        print(Fore.GREEN + "\n[INFO] Análise concluída com sucesso.")
     else:
         print(Fore.RED + "[ERRO] Nenhum arquivo foi selecionado.")
