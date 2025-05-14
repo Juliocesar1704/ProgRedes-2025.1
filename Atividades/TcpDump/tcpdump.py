@@ -184,6 +184,19 @@ def exibir_maior_pacote_tcp(lista_pacotes):
         ["IP de Destino", ip_destino_maior]
     ], headers=["Campo", "Valor"], tablefmt="fancy_grid"))
 
+# Função para exibir pacotes truncados (caplen < origlen)
+def exibir_pacotes_truncados(lista_pacotes):
+    truncados = 0
+    for pacote in lista_pacotes:
+        if pacote['caplen'] < pacote['origlen']:
+            truncados += 1
+
+    print(Fore.LIGHTRED_EX + "\n[INFO] Verificação de pacotes truncados:")
+    print(tabulate([
+        ["Total de pacotes analisados", len(lista_pacotes)],
+        ["Pacotes truncados (caplen < origlen)", truncados]
+    ], headers=["Descrição", "Valor"], tablefmt="fancy_grid"))
+
 # Função principal para executar o código
 if __name__ == "__main__":
     caminho_selecionado = abrir_janela_selecao_arquivo()
@@ -193,6 +206,8 @@ if __name__ == "__main__":
         exibir_headers_ip(pacotes_lidos)
         exibir_intervalo_captura(pacotes_lidos)
         exibir_maior_pacote_tcp(pacotes_lidos)
+        exibir_pacotes_truncados(pacotes_lidos)
+        
         print(Fore.GREEN + "\n[INFO] Análise concluída com sucesso.")
     else:
         print(Fore.RED + "[ERRO] Nenhum arquivo foi selecionado.")
