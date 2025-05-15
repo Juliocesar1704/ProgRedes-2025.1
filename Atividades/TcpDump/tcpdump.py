@@ -80,7 +80,7 @@ def exibir_headers_ip(lista_pacotes):
     for pacote in lista_pacotes:
         dados = pacote['dados']
         if len(dados) < 34:
-            continue  
+            continue  # pacote muito pequeno para conter cabeçalho IP
 
         # Ignorar cabeçalho Ethernet (primeiros 14 bytes)
         cabecalho_ip = dados[14:34]
@@ -155,7 +155,7 @@ def exibir_maior_pacote_tcp(lista_pacotes):
     for pacote in lista_pacotes:
         dados = pacote['dados']
         if len(dados) < 34:
-            continue  # não tem IP suficiente
+            continue
 
         # Ignora cabeçalho Ethernet
         cabecalho_ip = dados[14:34]
@@ -197,6 +197,117 @@ def exibir_pacotes_truncados(lista_pacotes):
         ["Pacotes truncados (caplen < origlen)", truncados]
     ], headers=["Descrição", "Valor"], tablefmt="fancy_grid"))
 
+# Função para exibir o tamanho médio dos pacotes UDP capturados
+def exibir_tamanho_medio_udp(lista_pacotes):
+    soma_tamanhos_udp = 0
+    quantidade_udp = 0
+
+    for pacote in lista_pacotes:
+        dados = pacote['dados']
+        if len(dados) < 34:
+            continue  
+
+        # Ignorar cabeçalho Ethernet (14 bytes)
+        cabecalho_ip = dados[14:34]
+        protocolo = cabecalho_ip[9]
+
+        # Protocolo UDP é identificado pelo número 17 no campo "Protocol" do cabeçalho IP
+        if protocolo == 17:
+            soma_tamanhos_udp += pacote['origlen']
+            quantidade_udp += 1
+
+    if quantidade_udp == 0:
+        print(Fore.YELLOW + "\n[INFO] Nenhum pacote UDP foi encontrado.")
+        return
+
+    media = soma_tamanhos_udp / quantidade_udp
+
+    print(Fore.YELLOW + "\n[INFO] Tamanho médio dos pacotes UDP capturados:")
+    print(tabulate([
+        ["Total de pacotes UDP", quantidade_udp],
+        ["Tamanho médio (bytes)", f"{media:.2f}"]
+    ], headers=["Descrição", "Valor"], tablefmt="fancy_grid"))
+
+# Função para exibir o par de IPs com maior tráfego
+def exibir_maior_trafego_por_par(lista_pacotes):
+    trafego_por_par = {}
+
+    for pacote in lista_pacotes:
+        dados = pacote['dados']
+        if len(dados) < 34:
+            continue 
+
+        cabecalho_ip = dados[14:34]
+        ip_origem = ".".join(str(b) for b in cabecalho_ip[12:16])
+        ip_destino = ".".join(str(b) for b in cabecalho_ip[16:20])
+
+        par = (ip_origem, ip_destino)
+
+        if par not in trafego_por_par:
+            trafego_por_par[par] = 0
+
+        trafego_por_par[par] += pacote['origlen']  # Acumula o tamanho original
+
+    if not trafego_por_par:
+        print(Fore.YELLOW + "\n[INFO] Nenhum par de IPs encontrado.")
+        return
+
+    par_mais_trafego = max(trafego_por_par, key=trafego_por_par.get)
+    total_bytes = trafego_por_par[par_mais_trafego]
+
+    print(Fore.LIGHTGREEN_EX + "\n[INFO] Par de IPs com maior tráfego:")
+    print(tabulate([
+        ["IP de Origem", par_mais_trafego[0]],
+        ["IP de Destino", par_mais_trafego[1]],
+        ["Total de Dados (bytes)", total_bytes]
+    ], headers=["Campo", "Valor"], tablefmt="fancy_grid"))
+
+# Função para exibir interações da interface local com outros IPs (considerando o IP mais frequente como origem)
+def exibir_interacoes_da_interface(lista_pacotes):
+    contagem_origem = {}
+    interacoes = set()
+
+    for pacote in lista_pacotes:
+        dados = pacote['dados']
+        if len(dados) < 34:
+            continue
+
+        cabecalho_ip = dados[14:34]
+        ip_origem = ".".join(str(b) for b in cabecalho_ip[12:16])
+        ip_destino = ".".join(str(b) for b in cabecalho_ip[16:20])
+
+        # Contagem para identificar o IP mais frequente como origem (provavelmente da interface local)
+        if ip_origem not in contagem_origem:
+            contagem_origem[ip_origem] = 0
+        contagem_origem[ip_origem] += 1
+
+    if not contagem_origem:
+        print(Fore.RED + "[ERRO] Nenhum IP encontrado para análise.")
+        return
+
+    # IP da interface local (o que mais apareceu como origem)
+    ip_interface = max(contagem_origem, key=contagem_origem.get)
+
+    for pacote in lista_pacotes:
+        dados = pacote['dados']
+        if len(dados) < 34:
+            continue
+
+        cabecalho_ip = dados[14:34]
+        ip_origem = ".".join(str(b) for b in cabecalho_ip[12:16])
+        ip_destino = ".".join(str(b) for b in cabecalho_ip[16:20])
+
+        if ip_origem == ip_interface:
+            interacoes.add(ip_destino)
+        elif ip_destino == ip_interface:
+            interacoes.add(ip_origem)
+
+    print(Fore.LIGHTBLUE_EX + "\n[INFO] Interações do IP da interface local:")
+    print(tabulate([
+        ["IP da Interface", ip_interface],
+        ["Total de IPs diferentes que interagiram com ele", len(interacoes)]
+    ], headers=["Campo", "Valor"], tablefmt="fancy_grid"))
+
 # Função principal para executar o código
 if __name__ == "__main__":
     caminho_selecionado = abrir_janela_selecao_arquivo()
@@ -207,7 +318,9 @@ if __name__ == "__main__":
         exibir_intervalo_captura(pacotes_lidos)
         exibir_maior_pacote_tcp(pacotes_lidos)
         exibir_pacotes_truncados(pacotes_lidos)
-        
+        exibir_tamanho_medio_udp(pacotes_lidos)
+        exibir_maior_trafego_por_par(pacotes_lidos)
+        exibir_interacoes_da_interface(pacotes_lidos)
         print(Fore.GREEN + "\n[INFO] Análise concluída com sucesso.")
     else:
         print(Fore.RED + "[ERRO] Nenhum arquivo foi selecionado.")
