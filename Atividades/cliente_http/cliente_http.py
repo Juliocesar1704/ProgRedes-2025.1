@@ -14,7 +14,7 @@ def extrairDados(url: str) -> tuple:
     partes = url.split("/")
     host = partes[0]
     caminho = "/" + "/".join(partes[1:]) if len(partes) > 1 else "/"
-    nome_arquivo = partes[-1] if "." in partes[-1] else ""
+    nome_arquivo = partes[-1] if "." in partes[-1] else "pagina.html"  # nome padrão se não houver
 
     return esquema, host, caminho, nome_arquivo
 
@@ -82,6 +82,58 @@ with open("header_resposta.txt", "w", encoding="utf-8") as f:
 print("\n===== Início da Resposta HTTP(S) =====")
 print(header_bytes.decode(errors="replace"))
 print("\n===== Fim do HEADER (salvo em header_resposta.txt) =====")
+
+# Faz a análise do header para Content-Length e chunked
+header_str = header_bytes.decode(errors="replace").lower()
+
+is_chunked = "transfer-encoding: chunked" in header_str
+content_length = None
+for linha in header_str.splitlines():
+    if linha.startswith("content-length:"):
+        try:
+            content_length = int(linha.split(":")[1].strip())
+        except ValueError:
+            pass
+        break
+
+# Diagnóstico da forma de transferência
+if is_chunked:
+    print("🔄 Transfer-Encoding: chunked detectado (salvando como veio).")
+elif content_length:
+    print(f"📦 Content-Length detectado: {content_length} bytes.")
+else:
+    print("❓ Nenhum método claro de transferência detectado.")
+
+# Reconstrói o conteúdo se for chunked
+def reconstruir_chunked(data: bytes) -> bytes:
+    resultado = b""
+    pos = 0
+    while True:
+        fim_linha = data.find(b"\r\n", pos)
+        if fim_linha == -1:
+            break
+        tamanho_hex = data[pos:fim_linha].decode(errors="replace").strip()
+        if not tamanho_hex:
+            break
+        tamanho = int(tamanho_hex, 16)
+        if tamanho == 0:
+            break
+        inicio_chunk = fim_linha + 2
+        fim_chunk = inicio_chunk + tamanho
+        resultado += data[inicio_chunk:fim_chunk]
+        pos = fim_chunk + 2  # pula o \r\n do fim da chunk
+    return resultado
+
+# Salva o corpo da resposta no arquivo com o nome adequado
+if is_chunked:
+    body_bytes = reconstruir_chunked(body_bytes)
+    print("🔧 Chunked reconstituído com sucesso.")
+
+with open(nome_arquivo, "wb") as f:
+    f.write(body_bytes)
+
+print(f"✅ Conteúdo salvo em '{nome_arquivo}'")
+
 
 
 
